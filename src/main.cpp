@@ -13,6 +13,9 @@
 #define ROW_NUM     4 // four rows
 #define COLUMN_NUM  4 // four columns
 
+#define ROW_NUM_10     10 // ten rows
+#define COLUMN_NUM_10  10 // ten columns
+
 char keys[ROW_NUM][COLUMN_NUM] = {
   {'1','2','3', 'A'},
   {'4','5','6', 'B'},
@@ -28,22 +31,59 @@ LiquidCrystal_I2C lcd(0x27, 16, 2); // I2C address 0x27, 16 column and 2 rows
 
 int cursorColumn = 0;
 
+int puntos = 0;
+int vidas = 10;
+int tablaMultiplicar[ROW_NUM_10][COLUMN_NUM_10];
+
+
 void setup(){
+  Serial.begin(9600);
+
   lcd.init(); // initialize the lcd
   lcd.backlight();
+
+    // Generar tabla de multiplicar
+  for (int i = 0; i < 10; i++) {
+    for (int j = 0; j < 10; j++) {
+      //tabla[i][j] = (i + 1) * (j + 1);
+      tablaMultiplicar[i][j] = 0;
+    }
+  }
 }
 
 void loop(){
-  char key = keypad.getKey();
+  int fila = 0;
+  int columna = 0;
+  //Generar dos números aleatorios
+  do{
+    fila = random(1, 11);
+    columna = random(1, 11);
+  }while (tablaMultiplicar[fila][columna] ==1);
 
-  if (key) {
-    lcd.setCursor(cursorColumn, 0); // move cursor to   (cursorColumn, 0)
-    lcd.print(key);                 // print key at (cursorColumn, 0)
+    int resultado = fila * columna;
 
-    cursorColumn++;                 // move cursor to next position
-    if(cursorColumn == 16) {        // if reaching limit, clear LCD
-      lcd.clear();
-      cursorColumn = 0;
+      // Mostrar la operación en la pantalla LCD
+    lcd.clear();
+    lcd.print(fila);
+    lcd.print(" x ");
+    lcd.print(columna);
+    lcd.print(" = ?");
+
+  // Leer la respuesta del usuario
+  char respuesta = keypad.getKey();
+
+
+  if (respuesta != NO_KEY) {
+    Serial.println(respuesta);
+    lcd.print(respuesta);
+    int respuestaUsuario = respuesta - '0'; // Convertir la respuesta del usuario a un número entero
+    
+    if (respuestaUsuario == resultado) {
+      puntos++; // Aumentar la puntuación
+      lcd.setCursor(0, 1);
+      lcd.print("Puntuación: ");
+      lcd.print(puntos);
+      tablaMultiplicar[fila][columna] = 1;
     }
   }
 }
