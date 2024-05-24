@@ -10,7 +10,8 @@ void    inicializarTablas();
 void    imprimirDatos();
 int     generarOperacionAleatoria();
 int     mostrarJugada();
-void    escribir_operaciones();
+void    guardar_record();
+void    leer_record();
 
 int opcion;
 int tablas[10] = {0,0,0,0,0,0,0,0,0,0};
@@ -26,10 +27,13 @@ int totalOperaciones;
 
 int puntuacion = 0;
 
+int record = 0;
+
 
 
 int main()
 {
+    leer_record();
     opcion = menuPrincipal();
     seleccionarTablas();
     inicializarTablas(tablas, 10);
@@ -43,7 +47,11 @@ int main()
             eliminarElemento(posicion);
             puntuacion++;
         } else {
-            escribir_operaciones();
+            if(puntuacion > record){
+                guardar_record();
+                printf("Nuevo record : %d\n", puntuacion);
+            }
+            return 1;
         }
 
         imprimirDatos();
@@ -193,31 +201,27 @@ int mostrarJugada(int posicion){
 
 
 // Función para escribir las operaciones en un archivo
-void escribir_operaciones() {
+void guardar_record() {
     FILE *archivo = fopen(ARCHIVO_OPERACIONES, "w");
     if (archivo == NULL) {
         printf("Error al abrir el archivo para escribir.\n");
         return;
     }
 
-    for (int i = 0; i < totalOperaciones; i++) {
-        fprintf(archivo, "%d %d %d\n", datos[i].a, datos[i].b, datos[i].c);
-    }
+    fprintf(archivo, "%d\n", puntuacion);
 
     fclose(archivo);
 }
 
 // Función para leer las operaciones desde un archivo
-void leer_operaciones(Operacion *operaciones) {
+void leer_record() {
     FILE *archivo = fopen(ARCHIVO_OPERACIONES, "r");
     if (archivo == NULL) {
         printf("No se pudo abrir el archivo para leer, generando nuevas operaciones...\n");
         return;
     }
 
-    totalOperaciones = 0;
-    while (fscanf(archivo, "%d %d %d", datos[totalOperaciones].a, datos[totalOperaciones].b, datos[totalOperaciones].c) == 3) {
-        totalOperaciones++;
+    while (fscanf(archivo, "%d", &record) == 1) {
         //if (*tamaño >= TAMAÑO_MAX_OPERACIONES) {
         //    printf("Se alcanzó el límite máximo de operaciones.\n");
         //    break;
