@@ -2,6 +2,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <Arduino.h>
 #include <EEPROM.h>
+#include <math.h>
 
 
 #define DELAY_LCD_MENU     1000 // 1 SECONDS
@@ -48,7 +49,8 @@ void    fin_de_partida(int gana);
 //int   leerRespuesta();
 int   checkOpcion(char key);
 int   leerKeyPad(int longitud, char fin);
-
+int longitudNumero(int numero);
+char* cadenaResultado(int longitud);
 //void getInput();
 
 
@@ -71,6 +73,8 @@ char datosKeyPad[20];
 int tablas[10] = {0,0,0,0,0,0,0,0,0,0};
 
 int eeAdress = 0;
+
+char *cadena_resultado;
 
 void setup(){
   EEPROM.begin(sizeof(int));
@@ -258,24 +262,31 @@ int mostrarJugada(int posicion){
     int acierto = 0;
 
     lcd.clear();
-
+      
+    int longitud_a = longitudNumero(o.a);
+    int longitud_b = longitudNumero(o.b);
+    int longitud_c = longitudNumero(o.c);
+    
     switch (tipoJugada)
     {
         case 1:
-                lcd.printf("%d X %d = ?", o.a, o.b);
-                leerKeyPad(20, '#');
+                cadena_resultado = cadenaResultado(longitud_c); 
+                lcd.printf("%d X %d = %s", o.a, o.b, cadena_resultado);
+                leerKeyPad(longitud_c, ' ');
                 respuesta = atoi(datosKeyPad);
                 acierto = (o.c == respuesta) ? 1 : 0;
             break;
         case 2:
-                lcd.printf("? X %d = %d", o.b, o.c);
-                leerKeyPad(20, '#');
+                cadena_resultado = cadenaResultado(longitud_a); 
+                lcd.printf("%s X %d = %d", cadena_resultado, o.b, o.c);
+                leerKeyPad(longitud_a, ' ');
                 respuesta = atoi(datosKeyPad);
                 acierto = (o.a == respuesta) ? 1 : 0;
             break;    
         case 3:
-                lcd.printf("%d X ? = %d\n", o.a, o.c);
-                leerKeyPad(20, '#');
+                cadena_resultado = cadenaResultado(longitud_b); 
+                lcd.printf("%d X %s = %d\n", o.a, cadena_resultado, o.c);
+                leerKeyPad(longitud_b, ' ');
                 respuesta = atoi(datosKeyPad);               
                 acierto = (o.b == respuesta) ? 1 : 0;
             break;
@@ -344,4 +355,16 @@ void fin_de_partida(int gana){
     lcd.printf("Puntos %d: ", puntuacion);
     delay(5000);
   }
+}
+
+
+int longitudNumero(int numero){
+  return floor(log10(abs(numero)) + 1);
+}
+
+char* cadenaResultado(int longitud){
+  char* cadena = (char*)malloc((longitud + 1) * sizeof(char));
+  memset(cadena, '?', longitud);
+  cadena[longitud] = '\0';
+  return cadena;
 }
