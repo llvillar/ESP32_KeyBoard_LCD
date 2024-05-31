@@ -3,10 +3,13 @@
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <math.h>
+#include <pitches.h>
+
 
 
 #define DELAY_LCD_MENU     1000 // 1 SECONDS
 #define MOSTRAR_DATOS     0// No mostrar datos
+#define SPEAKER_PIN 23
 
 
 uint8_t state;
@@ -43,7 +46,7 @@ void    guardar_record();
 void    leer_record();
 void    jugar();
 void    inicializarPartida();
-void    fin_de_partida(int gana);
+void    fin_de_partida();
 //void  menuPrincipal();
 //void  iniciarTabla();
 //int   leerRespuesta();
@@ -52,6 +55,8 @@ int   leerKeyPad(int longitud, char fin);
 int longitudNumero(int numero);
 char* cadenaResultado(int longitud);
 //void getInput();
+void  playLevelUpSound();
+void displayScore();
 
 
 int opcion;
@@ -84,6 +89,7 @@ void setup(){
   Serial.begin(11600);
   lcd.init(); // initialize the lcd
   lcd.backlight();
+  pinMode(SPEAKER_PIN, OUTPUT);
   bienvenida();
   menuPrincipal();
 }
@@ -271,9 +277,12 @@ int mostrarJugada(int posicion){
     {
         case 1:
                 cadena_resultado = cadenaResultado(longitud_c); 
-                lcd.printf("%d X %d = %s", o.a, o.b, cadena_resultado);
+                lcd.printf("%d X %d = %d", o.a, o.b, o.c);
                 leerKeyPad(longitud_c, ' ');
                 respuesta = atoi(datosKeyPad);
+                lcd.setCursor(0,1);
+                lcd.print(respuesta);
+                delay(1000);
                 acierto = (o.c == respuesta) ? 1 : 0;
             break;
         case 2:
@@ -281,13 +290,19 @@ int mostrarJugada(int posicion){
                 lcd.printf("%s X %d = %d", cadena_resultado, o.b, o.c);
                 leerKeyPad(longitud_a, ' ');
                 respuesta = atoi(datosKeyPad);
+                lcd.setCursor(0,1);
+                lcd.print(respuesta);
+                delay(1000);
                 acierto = (o.a == respuesta) ? 1 : 0;
             break;    
         case 3:
                 cadena_resultado = cadenaResultado(longitud_b); 
                 lcd.printf("%d X %s = %d\n", o.a, cadena_resultado, o.c);
                 leerKeyPad(longitud_b, ' ');
-                respuesta = atoi(datosKeyPad);               
+                respuesta = atoi(datosKeyPad);   
+                lcd.setCursor(0,1);
+                lcd.print(respuesta);
+                delay(1000);        
                 acierto = (o.b == respuesta) ? 1 : 0;
             break;
         default:
@@ -309,6 +324,7 @@ int leerKeyPad(int longitud, char fin){
       datosKeyPad[contador] = caracter;
       contador++;
       if(contador >= longitud || caracter == fin){
+        datosKeyPad[contador] = '\0';
         break;
       }
     }
@@ -323,40 +339,21 @@ void jugar(){
         int posicion = generarOperacionAleatoria();
         if (mostrarJugada(posicion))
         {
+            playLevelUpSound();
             eliminarElemento(posicion);
             puntuacion++;
         } else {
-          fin_de_partida(0);
+          fin_de_partida();
           break;
         }
         imprimirDatos();
         if(totalOperaciones <= 0){
-          fin_de_partida(1);
+          fin_de_partida();
           break;
         }
     }
     opcion = 0;
 }
-
-void fin_de_partida(int gana){
-
-  lcd.clear();
-  lcd.print("Fin de partida!!");
-  
-  if(puntuacion > record){
-    lcd.setCursor(0,1);
-    lcd.printf("Nuevo record : %d", puntuacion);
-    record = puntuacion;
-    EEPROM.write(eeAdress, record);
-    EEPROM.commit();
-    delay(5000);
-  }else{
-    lcd.setCursor(0,1);
-    lcd.printf("Puntos %d: ", puntuacion);
-    delay(5000);
-  }
-}
-
 
 int longitudNumero(int numero){
   return floor(log10(abs(numero)) + 1);
@@ -367,4 +364,61 @@ char* cadenaResultado(int longitud){
   memset(cadena, '?', longitud);
   cadena[longitud] = '\0';
   return cadena;
+}
+
+void playLevelUpSound() {
+  tone(SPEAKER_PIN, NOTE_E4);
+  delay(150);
+  tone(SPEAKER_PIN, NOTE_G4);
+  delay(150);
+  tone(SPEAKER_PIN, NOTE_E5);
+  delay(150);
+  tone(SPEAKER_PIN, NOTE_C5);
+  delay(150);
+  tone(SPEAKER_PIN, NOTE_D5);
+  delay(150);
+  tone(SPEAKER_PIN, NOTE_G5);
+  delay(150);
+  noTone(SPEAKER_PIN);
+}
+
+void fin_de_partida() {
+  lcd.clear();
+  lcd.print("Fin de partida!!");
+
+
+
+  // Play a Wah-Wah-Wah-Wah sound
+  tone(SPEAKER_PIN, NOTE_DS5);
+  delay(300);
+  tone(SPEAKER_PIN, NOTE_D5);
+  delay(300);
+  tone(SPEAKER_PIN, NOTE_CS5);
+  delay(300);
+  for (byte i = 0; i < 10; i++) {
+    for (int pitch = -10; pitch <= 10; pitch++) {
+      tone(SPEAKER_PIN, NOTE_C5 + pitch);
+      delay(5);
+    }
+  }
+  noTone(SPEAKER_PIN);
+
+  displayScore();
+  puntuacion = 0;
+  delay(500);
+}
+
+void displayScore() {
+  if(puntuacion > record){
+    lcd.setCursor(0,1);
+    lcd.printf("Record : %d", puntuacion);
+    record = puntuacion;
+    EEPROM.write(eeAdress, record);
+    EEPROM.commit();
+    delay(5000);
+  }else{
+    lcd.setCursor(0,1);
+    lcd.printf("Puntos %d: ", puntuacion);
+    delay(5000);
+  }
 }

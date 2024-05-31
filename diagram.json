@@ -3,7 +3,7 @@
   "author": "Luis López Villar",
   "editor": "wokwi",
   "parts": [
-    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 263.9, "left": 235, "attrs": {} },
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 263.9, "left": 206.2, "attrs": {} },
     {
       "type": "wokwi-lcd1602",
       "id": "lcd1",
@@ -11,7 +11,8 @@
       "left": 82.4,
       "attrs": { "pins": "i2c" }
     },
-    { "type": "wokwi-membrane-keypad", "id": "keypad1", "top": -30.8, "left": 389.6, "attrs": {} }
+    { "type": "wokwi-membrane-keypad", "id": "keypad1", "top": -30.8, "left": 389.6, "attrs": {} },
+    { "type": "wokwi-buzzer", "id": "bz1", "top": 108, "left": 309, "attrs": { "volume": "0.1" } }
   ],
   "connections": [
     [ "lcd1:GND", "esp:GND.2", "black", [ "h-25", "v0" ] ],
@@ -25,7 +26,9 @@
     [ "keypad1:C1", "esp:RX2", "green", [ "v0" ] ],
     [ "keypad1:C2", "esp:D4", "green", [ "v0" ] ],
     [ "keypad1:C3", "esp:D2", "green", [ "v0" ] ],
-    [ "keypad1:C4", "esp:D15", "green", [ "v0" ] ]
+    [ "keypad1:C4", "esp:D15", "green", [ "v0" ] ],
+    [ "bz1:1", "esp:GND.1", "black", [ "v0" ] ],
+    [ "bz1:2", "esp:D23", "red", [ "v0" ] ]
   ],
   "dependencies": {}
 }
