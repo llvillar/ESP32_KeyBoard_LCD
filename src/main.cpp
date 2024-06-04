@@ -417,6 +417,7 @@ void fin_de_partida() {
   delay(500);
 }
 
+
 void displayScore() {
   if(puntuacion > record){
     lcd.setCursor(0,1);
