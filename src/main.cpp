@@ -5,12 +5,9 @@
 #include <math.h>
 #include <pitches.h>
 
-
-
-#define DELAY_LCD_MENU     1000 // 1 SECONDS
+#define DELAY_LCD_MENU    1000 // 1 SECONDS
 #define MOSTRAR_DATOS     0// No mostrar datos
 #define SPEAKER_PIN 23
-
 
 uint8_t state;
 
@@ -81,14 +78,20 @@ int eeAdress = 0;
 
 char *cadena_resultado;
 
-void setup(){
-  EEPROM.begin(sizeof(int));
+int longitud_total = 0;
 
-  EEPROM.get(eeAdress, record);
+void setup(){
+  //EEPROM.begin(sizeof(int));
+  EEPROM.begin(1024);
+
+
+  record = EEPROM.readInt(eeAdress);
 
   Serial.begin(11600);
   lcd.init(); // initialize the lcd
   lcd.backlight();
+  lcd.cursor();
+  lcd.blink();
   pinMode(SPEAKER_PIN, OUTPUT);
   bienvenida();
   menuPrincipal();
@@ -277,7 +280,8 @@ int mostrarJugada(int posicion){
     {
         case 1:
                 cadena_resultado = cadenaResultado(longitud_c); 
-                lcd.printf("%d X %d = %d", o.a, o.b, o.c);
+                lcd.printf("%d X %d = %s", o.a, o.b, cadena_resultado);
+                longitud_total = longitud_a + longitud_b + longitud_c + 6;
                 leerKeyPad(longitud_c, ' ');
                 respuesta = atoi(datosKeyPad);
                 lcd.setCursor(0,1);
@@ -317,11 +321,15 @@ int leerKeyPad(int longitud, char fin){
 
   // Lee continuamente desde el keypad hasta la longitud deseada
   int contador = 0;
+  lcd.setCursor(longitud_total - longitud + contador, 0);
+  lcd.cursor();
   while (true) {
     char caracter = keypad.getKey();
     if (caracter != NO_KEY) {
       
       datosKeyPad[contador] = caracter;
+      lcd.setCursor(longitud_total - longitud + contador, 0);
+      lcd.print(caracter);
       contador++;
       if(contador >= longitud || caracter == fin){
         datosKeyPad[contador] = '\0';
@@ -329,6 +337,7 @@ int leerKeyPad(int longitud, char fin){
       }
     }
   }
+  lcd.noCursor();
 
   return contador;
 }
@@ -413,7 +422,7 @@ void displayScore() {
     lcd.setCursor(0,1);
     lcd.printf("Record : %d", puntuacion);
     record = puntuacion;
-    EEPROM.write(eeAdress, record);
+    EEPROM.writeInt(eeAdress, record);
     EEPROM.commit();
     delay(5000);
   }else{
