@@ -17,8 +17,8 @@
   "connections": [
     [ "lcd1:GND", "esp:GND.2", "black", [ "h-25", "v0" ] ],
     [ "lcd1:VCC", "esp:VIN", "red", [ "h-30", "v0" ] ],
-    [ "lcd1:SDA", "esp:D21", "green", [ "h-15", "v0" ] ],
-    [ "lcd1:SCL", "esp:D22", "green", [ "h-20", "v0" ] ],
+    [ "lcd1:SDA", "esp:D21", "yellow", [ "h-15", "v0" ] ],
+    [ "lcd1:SCL", "esp:D22", "orange", [ "h-20", "v0" ] ],
     [ "keypad1:R1", "esp:D19", "green", [ "v28.8", "h-153.6" ] ],
     [ "keypad1:R2", "esp:D18", "green", [ "v0" ] ],
     [ "keypad1:R3", "esp:D5", "green", [ "v0" ] ],

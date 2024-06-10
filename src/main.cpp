@@ -1,15 +1,13 @@
-#include <Keypad.h>
-#include <LiquidCrystal_I2C.h>
 #include <Arduino.h>
 #include <EEPROM.h>
+#include <Keypad.h>
+#include <LiquidCrystal_I2C.h>
 #include <math.h>
 #include <pitches.h>
 
-#define DELAY_LCD_MENU    1000 // 1 SECONDS
-#define MOSTRAR_DATOS     0// No mostrar datos
+#define DELAY_LCD_MENU    800 // milisegundos
+#define MOSTRAR_DATOS     0   // Mostrar/No mostrar datos por si se han generado bien
 #define SPEAKER_PIN 23
-
-uint8_t state;
 
 // define numero de filas
 const uint8_t ROWS = 4;
@@ -23,121 +21,150 @@ char keys[ROWS][COLS] = {
   { '*', '0', '#', 'D' }
 };
 // pines correspondientes a las filas
-uint8_t colPins[COLS] = { 16, 4, 2, 15 };
-// pines correspondientes a las columnas
 uint8_t rowPins[ROWS] = { 19, 18, 5, 17 };
+// pines correspondientes a las columnas
+uint8_t colPins[COLS] = { 16, 4, 2, 15 };
+
 // crea objeto con los prametros creados previamente
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 LiquidCrystal_I2C lcd(0x27, 16, 2); // I2C address 0x27, 16 column and 2 rows
 
+/*
+* score - puntuación actual
+* record
+* opcion - opcion del modo de juego 1,2,3,4
+*/
+int score, record, opcion; 
 
-void    bienvenida();
-void    menuPrincipal();
-void    seleccionarTablas();
-void    inicializarTablas(int tablas[], int tamanio);
-void    imprimirDatos();
-int     generarOperacionAleatoria();
-int     mostrarJugada();
-void    guardar_record();
-void    leer_record();
-void    jugar();
-void    inicializarPartida();
-void    fin_de_partida();
-//void  menuPrincipal();
-//void  iniciarTabla();
-//int   leerRespuesta();
-int   checkOpcion(char key);
-int   leerKeyPad(int longitud, char fin);
-int longitudNumero(int numero);
-char* cadenaResultado(int longitud);
-//void getInput();
-void  playLevelUpSound();
-void displayScore();
-
-
-int opcion;
-
-int puntuacion;
-int record;
-
+/*
+* Estructura con los datos de la operación de la tabla de multiplicar
+* donde: a X b = c
+*/
 typedef struct {
     int a;
     int b;
     int c;
 } Operacion;
 
+//Puntero a las operaciones que van a realizarse durante el juego
 Operacion *datos;
+
+// total de operaciones a realizar, es un contador 
 int totalOperaciones;
 
+//Array para almacenar temporalmente las datos del teclado
 char datosKeyPad[20];
 
-int tablas[10] = {0,0,0,0,0,0,0,0,0,0};
+//Array para almacenar las tablas a practicar
+int tablas[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+//Direccion de memoria para la EEPROM
 int eeAdress = 0;
 
+//Puntero para almacenar los datos de la solución 
 char *cadena_resultado;
 
+//longitud de la solucion, para poder mostrarla por la pantalla LCD en la posicón deseada
 int longitud_total = 0;
 
-void setup(){
-  //EEPROM.begin(sizeof(int));
+String inputPassword = ""; // Almacena la entrada del usuario
+String correctPassword = "ABBA"; // La clave correcta para resetear record
+
+void resetRecord(){
+    record = 0;
+    EEPROM.writeInt(eeAdress, record);
+    EEPROM.commit();
+}
+
+//Obtenemos el record almacenado en la EEPROM
+void initRecord(){
+  EEPROM.begin(sizeof(int));
   EEPROM.begin(1024);
-
-
   record = EEPROM.readInt(eeAdress);
+}
 
-  Serial.begin(11600);
+//Iniciar la pantalla LCD
+void initLCD(){
   lcd.init(); // initialize the lcd
   lcd.backlight();
-  lcd.cursor();
-  lcd.blink();
+  lcd.noCursor();
+}
+
+//Iniocializar el buzzer
+void initSpeaker(){
   pinMode(SPEAKER_PIN, OUTPUT);
-  bienvenida();
-  menuPrincipal();
 }
 
-
-void loop(){
-  inicializarPartida();
-  leerKeyPad(1, ' ');
-  char key = datosKeyPad[0];
-  if (key){
-    lcd.setCursor(15,1);
-    lcd.print(key);
-    opcion = checkOpcion(key);
-  }
-  if(opcion > 0 && opcion < 5){
-    seleccionarTablas();
-    inicializarTablas(tablas, 10);
-    imprimirDatos();
-    jugar();
-    menuPrincipal();
-  } else {
-    menuPrincipal();
-  }
-}
-
-void bienvenida(){
+//Mensaje de bienvenida
+void wellcome(){
   lcd.print("Tablas de");
   lcd.setCursor(0,1);
   lcd.print("multiplicar");
-  delay(2000);
+  delay(1500);
 }
 
-void inicializarPartida(){
-  free(datos);
-  for (int i = 0; i < 10; i++)
-  {
-    tablas[i] = 0;
+/*
+* metodo para leer desde el teclado 
+* longitud - indica la cantidad de caracteres que se desean leer
+* fin - char para indicar unncaracter de fin de lectura 
+* rowLCD, colLCD - posición del cursor del LCD para escribir mientras se introducen datos
+*
+*/
+int readKeyPadFromMenu(int longitud, char fin, int rowLCD, int colLCD){
+  String clave = "ABBA";
+  // Lee continuamente desde el keypad hasta la longitud deseada o caracter de fin
+  int contador = 0;
+  lcd.setCursor(colLCD, rowLCD);
+  lcd.cursor();
+  while (true) {
+    char caracter = keypad.getKey();
+
+    if (caracter != NO_KEY && (caracter == '1' || caracter == '2' || caracter == '3' 
+    || caracter == '4' || caracter == '5' || caracter == '6' || caracter == '7' || caracter == '8' 
+    || caracter == '9' || caracter == '0' || caracter == fin )) {
+      
+      lcd.print(caracter);
+
+      datosKeyPad[contador] = caracter;
+      contador++;
+      if(contador >= longitud || caracter == fin){
+        /*if(caracter == fin){
+          datosKeyPad[contador] = caracter;
+          contador++;
+        }*/
+        datosKeyPad[contador] = '\0';
+        break;
+      }
+    }
+    
+    if (caracter != NO_KEY && (caracter == 'A' || caracter == 'B' || caracter == 'C' || caracter == 'D' )) {
+        inputPassword += caracter;
+        if(inputPassword.length() >= 4){
+          if (inputPassword == correctPassword) {
+            resetRecord();
+            tone(SPEAKER_PIN, 2000, 200);
+          } else{
+            tone(SPEAKER_PIN, 500, 200);
+          }
+          inputPassword = "";
+        }
+    }
   }
-  puntuacion = 0;
+  lcd.noCursor();
+
+  return contador;
 }
 
-void menuPrincipal() {
+/*
+* Menu principal donde se elige la opcion de juego
+*/
+void mainMenu() {
     lcd.clear();
     lcd.setCursor(0,1);
     lcd.print("Elige opcion: ");
+    //lcd.setCursor(0,0);
+    //lcd.print("0.Reset record");
     lcd.setCursor(0,0);
     lcd.print("1. a X b = ?");
     delay(DELAY_LCD_MENU);
@@ -148,9 +175,36 @@ void menuPrincipal() {
     lcd.print("3. a X ? = c");
     delay(DELAY_LCD_MENU);
     lcd.setCursor(0,0);
-    lcd.print("4. ? X ? = ?");    
+    lcd.print("4. ? X ? = ?");  
+    readKeyPadFromMenu(1,' ', 1, 13);
+    delay(500);
 }
 
+/*
+* Metodo de inicialización de las variables del juego, conjunto de datos, tablas y puntuación.
+*/
+void initGame(){
+  if(datos) {
+    free(datos);
+    datos = NULL;
+  }
+
+  for (int i = 0; i < 9; i++)
+  {
+    tablas[i] = 0;
+  }
+
+  for (int i = 0; i < 20; i++)
+  {
+    datosKeyPad[i] = '\0';
+  }
+
+  score = 0;
+}
+
+/*
+* Metodo que comprueba que la opción de juego es correcta la 1,2,3,4
+*/
 int checkOpcion(char key){
   int opcion = 0;
   switch (key)
@@ -165,60 +219,225 @@ int checkOpcion(char key){
   return opcion;
 }
 
-void seleccionarTablas(){
-    lcd.clear();
-    lcd.print("12345678910#");
+/*
+* Metodo que imprime la solución en caso de que el jugador haya fallado la operación
+*/
+void imprimirSolucion(int solucion)
+{
     lcd.setCursor(0,1);
-    lcd.print("(*) Todas");
+    lcd.printf("Solucion : %d", solucion);
     delay(1000);
-    int longitud = leerKeyPad(20, '#');
-
-    // Verificar si el carácter '*' está presente
-    if (strchr(datosKeyPad, '*') != NULL) {
-        for (int i = 0; i < 10; i++)
-        {
-            tablas[i] = i + 1;
-        }
-    } else {
-        for (int i = 0; i < longitud; i++)
-        {
-            int numero = datosKeyPad[i] - '0';
-            if (numero >= 1 && numero <= 10) {
-              tablas[i] = numero;
-            }
-        }
-    }
 }
 
+/*
+* Metodo que ejecuta una melodia si se ha alcanzado un nuevo record
+*/
+void playRecordMelody() {
+
+int melody[] = {
+  NOTE_E5, NOTE_E5, 0, NOTE_E5,
+  0, NOTE_C5, NOTE_E5, 0,
+  NOTE_G5, 0, 0, 0,
+  NOTE_G4, 0, 0, 0,
+
+  NOTE_C5, 0, 0, NOTE_G4,
+  0, 0, NOTE_E4, 0,
+  0, NOTE_A4, 0, NOTE_B4,
+  0, NOTE_AS4, NOTE_A4, 0,
+
+  NOTE_G4, NOTE_E5, 0, NOTE_G5,
+  NOTE_A5, 0, NOTE_F5, NOTE_G5,
+  0, NOTE_E5, 0, NOTE_C5,
+  NOTE_D5, NOTE_B4, 0, 0,
+
+  NOTE_C5, 0, 0, NOTE_G4,
+  0, 0, NOTE_E4, 0,
+  0, NOTE_A4, 0, NOTE_B4,
+  0, NOTE_AS4, NOTE_A4, 0,
+
+  NOTE_G4, NOTE_E5, 0, NOTE_G5,
+  NOTE_A5, 0, NOTE_F5, NOTE_G5,
+  0, NOTE_E5, 0, NOTE_C5,
+  NOTE_D5, NOTE_B4, 0, 0
+};
+
+// Duraciones de cada nota (4 significa una negra, 8 significa una corchea, etc.)
+int noteDurations[] = {
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+  12, 12, 12, 12,
+  12, 12, 12, 12
+};
+
+
+  for (int thisNote = 0; thisNote < sizeof(melody)/sizeof(melody[0]); thisNote++) {
+    // Calcular la duración de la nota
+    int noteDuration = 1000 / noteDurations[thisNote];
+    tone(SPEAKER_PIN, melody[thisNote], noteDuration);
+
+    // Pausa entre las notas para distinguirlas claramente
+    int pauseBetweenNotes = noteDuration * 1.30;
+    delay(pauseBetweenNotes);
+
+    // Apagar el buzzer entre las notas
+    noTone(SPEAKER_PIN);
+  }
+}
+
+/*
+* Método que muestra la puntuación obtenida tras la partida
+* si hay un nuevo record lo guarda en la EEPROM
+*/
+void displayScore() {
+  if(score > record){
+    lcd.setCursor(0,1);
+    lcd.printf("Record: %d", score);
+    record = score;
+    EEPROM.writeInt(eeAdress, record);
+    EEPROM.commit();
+    playRecordMelody();
+    //delay(4000);
+  }else{
+    lcd.setCursor(0,1);
+    lcd.printf("Puntos: %d ", score);
+    delay(3000);
+    lcd.setCursor(0,1);
+    lcd.printf("Record: %d", score);
+    delay(2000);
+  }
+}
+
+/*
+* Metodo que muestra las tablas de multiplicar 1 al 9 por pantalla e indica que se pulse * para confirmar
+* Si se pulsa un numero la tabla es eliminada/mostrada en función si está o no seleccionada.
+*/
+void seleccionarTablas(){
+  while(1){
+    int tablasSeleccionadas = 0;
+    lcd.clear();
+    for (int i = 0; i < 9; i++)
+    {
+      if(tablas[i] != 0){
+        lcd.print(tablas[i]);
+        tablasSeleccionadas  = 1;
+      }
+    }
+    if(!tablasSeleccionadas){
+      lcd.print("Marque tablas");      
+    }
+    lcd.setCursor(0,1);
+    lcd.print("(*) Confirmar");
+    //delay(100);
+
+    int longitud = readKeyPadFromMenu(1, '*', 0, 0);
+
+    // Verificar si el carácter '*' está presente
+    if (datosKeyPad[0] == '1'
+          || datosKeyPad[0] == '2'
+          || datosKeyPad[0] == '3'
+          || datosKeyPad[0] == '4'
+          || datosKeyPad[0] == '5'
+          || datosKeyPad[0] == '6'
+          || datosKeyPad[0] == '7'
+          || datosKeyPad[0] == '8'
+          || datosKeyPad[0] == '9') {
+
+        
+        int indice = datosKeyPad[0] - '0';
+        //Cada vez que se pulsa un nuemro del teclado eliminamos esa tabla de la lista 
+        //seteando ese elemento a 0. Si se vuelve a pulsar el mismo número volvemos a poner el valor 
+        //correcto en el indice del array de tablas.
+        if(tablas[indice-1] == 0){
+          tablas[indice-1] = indice;
+        }else{
+          tablas[indice-1] = 0;
+        }
+    } else if(datosKeyPad[0] == '*'){
+      //Pulsando el *, el juego comienza con las tablas mostradas en la pantalla
+      //que han sido seleccionadas
+      int algunaTabla = 0;
+
+      //En este for se comprueba que al menos una tabla esté seleccionada en 
+      //caso contrario se vuelven a mostrar todas
+      for (int i = 0; i < 9; i++)
+      {
+        if(tablas[i] != 0){
+          algunaTabla++;
+        }
+      }
+      if (algunaTabla)
+      {
+        break;
+      }
+    } else{
+      for (int i = 0; i < 9; i++)
+      {
+        tablas[i]=i+1;  
+      }
+    }
+  }
+}
+
+
+/*
+* En este metodo se inicializa un puntero a un conjunto de estructuras de tipo Operación
+* con los datos selecionados en el array tablas
+*/
 void inicializarTablas(int tablas[], int tamanio){
 
     int contador = 0;
-    for (int i = 0; i < tamanio; i++)
+    for (int i = 0; i < 9; i++)
     {
         if (tablas[i] != 0)
         {
             contador++;
-        }else{
-            break;
         }
     }
 
     totalOperaciones = 10 * contador;
     datos = (Operacion *) malloc(totalOperaciones * sizeof(Operacion));
     
-    for (int i = 0; i < contador; i++)
+    int desplazamiento = 0;
+    for (int i = 0; i < 9; i++)
     {
-        for (int j = 0; j < 10; j++)
+        if (tablas[i] != 0)
         {
-            datos[j+(i*10)].a = tablas[i];
-            datos[j+(i*10)].b = j + 1;
-            datos[j+(i*10)].c = tablas[i] * (j + 1);
+          for (int j = 0; j < 10; j++)
+          {
+
+            datos[j+(desplazamiento*10)].a = tablas[i];
+            datos[j+(desplazamiento*10)].b = j + 1;
+            datos[j+(desplazamiento*10)].c = tablas[i] * (j + 1);
+          }
+          desplazamiento++;
         }     
     }
-
 }
 
-void imprimirDatos(){
+/*
+* Metodo auxiliar para imprimir el conjunto de datos, para comprobar que se han generado correctamente
+*/
+void printData(){
   if(MOSTRAR_DATOS){
     for (int i = 0; i < totalOperaciones; i++) {
       lcd.clear();
@@ -228,19 +447,22 @@ void imprimirDatos(){
   }
 }
 
-
+/*
+* Metodo que genera un numero aleatorio entre 1 y el total de operaciones que restan por mostrar (totalOperaciones)
+* este numero aleatorio representa la posicion del elemento dentro del array
+*/
 int generarOperacionAleatoria(){
-
     srand(time(NULL));
-
     int random = (rand() % totalOperaciones);
-
-    printf("aleatorio %d\n", random);
-
     return random;
 }
 
-
+/*
+* Metodo que eliminar un elemento del array de datos del conjunto de operaciones por la posicion dada
+* La posicion es el numero aleatorio generado para selecionar la Operacion a realizar.
+* Cada Operacion acertada se reduce el array y por lo tanto totalOperaciones se decrementa en una unidad
+* para la generación del siguiente número aleatorio.
+*/
 void eliminarElemento(int posicion) {
     // Verificar si la posición es válida
     if (posicion < 0 || posicion >= totalOperaciones) {
@@ -257,117 +479,17 @@ void eliminarElemento(int posicion) {
     totalOperaciones--;
 }
 
-
-int mostrarJugada(int posicion){
-
-    int respuesta;
-    Operacion o = datos[posicion];
-
-    srand(time(NULL));
-
-    int tipoJugada = (opcion != 4) ? opcion : (rand()%3 +1);
-
-    printf("Tipo jugada %d:\n", tipoJugada);
-    int acierto = 0;
-
-    lcd.clear();
-      
-    int longitud_a = longitudNumero(o.a);
-    int longitud_b = longitudNumero(o.b);
-    int longitud_c = longitudNumero(o.c);
-    
-    switch (tipoJugada)
-    {
-        case 1:
-                cadena_resultado = cadenaResultado(longitud_c); 
-                lcd.printf("%d X %d = %s", o.a, o.b, cadena_resultado);
-                longitud_total = longitud_a + longitud_b + longitud_c + 6;
-                leerKeyPad(longitud_c, ' ');
-                respuesta = atoi(datosKeyPad);
-                lcd.setCursor(0,1);
-                lcd.print(respuesta);
-                delay(1000);
-                acierto = (o.c == respuesta) ? 1 : 0;
-            break;
-        case 2:
-                cadena_resultado = cadenaResultado(longitud_a); 
-                lcd.printf("%s X %d = %d", cadena_resultado, o.b, o.c);
-                leerKeyPad(longitud_a, ' ');
-                respuesta = atoi(datosKeyPad);
-                lcd.setCursor(0,1);
-                lcd.print(respuesta);
-                delay(1000);
-                acierto = (o.a == respuesta) ? 1 : 0;
-            break;    
-        case 3:
-                cadena_resultado = cadenaResultado(longitud_b); 
-                lcd.printf("%d X %s = %d\n", o.a, cadena_resultado, o.c);
-                leerKeyPad(longitud_b, ' ');
-                respuesta = atoi(datosKeyPad);   
-                lcd.setCursor(0,1);
-                lcd.print(respuesta);
-                delay(1000);        
-                acierto = (o.b == respuesta) ? 1 : 0;
-            break;
-        default:
-            break;
-    }
-
-    return acierto;
-}
-
-
-int leerKeyPad(int longitud, char fin){
-
-  // Lee continuamente desde el keypad hasta la longitud deseada
-  int contador = 0;
-  lcd.setCursor(longitud_total - longitud + contador, 0);
-  lcd.cursor();
-  while (true) {
-    char caracter = keypad.getKey();
-    if (caracter != NO_KEY) {
-      
-      datosKeyPad[contador] = caracter;
-      lcd.setCursor(longitud_total - longitud + contador, 0);
-      lcd.print(caracter);
-      contador++;
-      if(contador >= longitud || caracter == fin){
-        datosKeyPad[contador] = '\0';
-        break;
-      }
-    }
-  }
-  lcd.noCursor();
-
-  return contador;
-}
-
-void jugar(){
-  while (1)
-    {
-        int posicion = generarOperacionAleatoria();
-        if (mostrarJugada(posicion))
-        {
-            playLevelUpSound();
-            eliminarElemento(posicion);
-            puntuacion++;
-        } else {
-          fin_de_partida();
-          break;
-        }
-        imprimirDatos();
-        if(totalOperaciones <= 0){
-          fin_de_partida();
-          break;
-        }
-    }
-    opcion = 0;
-}
-
+/*
+* Metodo para conocer la longitud del resultado esperado, se usa para poder conocer cuantos simbolos ?
+* mostrar como pista al jugador
+*/
 int longitudNumero(int numero){
   return floor(log10(abs(numero)) + 1);
 }
 
+/*
+* metodo que genera un array con la cantidad de simbolos ? que se pasen por parámetro(longitud)
+*/
 char* cadenaResultado(int longitud){
   char* cadena = (char*)malloc((longitud + 1) * sizeof(char));
   memset(cadena, '?', longitud);
@@ -375,6 +497,9 @@ char* cadenaResultado(int longitud){
   return cadena;
 }
 
+/*
+* Metodo que interpreta melodia cuando hay acierto
+*/
 void playLevelUpSound() {
   tone(SPEAKER_PIN, NOTE_E4);
   delay(150);
@@ -391,44 +516,154 @@ void playLevelUpSound() {
   noTone(SPEAKER_PIN);
 }
 
-void fin_de_partida() {
+
+/*
+* Metodo que mostrará la jugada correspondiente al numero aleatorio generado, que representa la posición de la 
+* Operacion a realizar dentro del array
+* devuelve 1 o 0 si se ha acertado o no.
+*/
+int mostrarJugada(int posicion){
+
+    int respuesta;
+    //Operacion selecionada aleatoriamente
+    Operacion o = datos[posicion];
+
+    srand(time(NULL));
+
+    //Tipo de jugada sera 1,2,3 .
+    //Si el usuario seleciona el 4 en cada jugada se genera un numero aleatorio entre 1 y 3
+    int tipoJugada = (opcion != 4) ? opcion : (rand()%3 +1);
+
+    int acierto = 0;
+
+    lcd.clear();
+      
+    //Variables para concer la posición del cursor(LCD) para mostrar los resultados
+    int longitud_a = longitudNumero(o.a);
+    int longitud_b = longitudNumero(o.b);
+    int longitud_c = longitudNumero(o.c);
+    int solucion;
+
+    switch (tipoJugada)
+    {
+        case 1:
+                solucion = o.c;
+                cadena_resultado = cadenaResultado(longitud_c); 
+                lcd.printf("%d X %d = %s", o.a, o.b, cadena_resultado);
+                longitud_total = longitud_a + longitud_b + longitud_c + 6;
+                readKeyPadFromMenu(longitud_c, ' ', 0, longitud_total-longitud_c);
+                respuesta = atoi(datosKeyPad);
+                acierto = (o.c == respuesta) ? 1 : 0;
+            break;
+        case 2:
+                solucion = o.a;
+                cadena_resultado = cadenaResultado(longitud_a); 
+                lcd.printf("%s X %d = %d", cadena_resultado, o.b, o.c);
+                readKeyPadFromMenu(longitud_a, ' ', 0, 0);
+                respuesta = atoi(datosKeyPad);
+                acierto = (o.a == respuesta) ? 1 : 0;
+            break;    
+        case 3:
+                solucion = o.b;
+                cadena_resultado = cadenaResultado(longitud_b); 
+                lcd.printf("%d X %s = %d\n", o.a, cadena_resultado, o.c);
+                longitud_total = longitud_a + 3;
+                readKeyPadFromMenu(longitud_b, ' ', 0, longitud_total);
+                respuesta = atoi(datosKeyPad);   
+                acierto = (o.b == respuesta) ? 1 : 0;
+            break;
+        default:
+            break;
+    }
+
+    //Si falla el jugador se le meuestra la solucion
+    if(!acierto){
+        imprimirSolucion(solucion);
+    }
+
+    return acierto;
+}
+
+/*
+* Método que imprime el mensaje de fin de partida y ejecuta un una melodia
+* Mestra la puntuación obtenida e inicializa la puntuacion a 0.
+*/
+void fin_de_partida(int perdida) {
   lcd.clear();
   lcd.print("Fin de partida!!");
 
-
-
   // Play a Wah-Wah-Wah-Wah sound
-  tone(SPEAKER_PIN, NOTE_DS5);
-  delay(300);
-  tone(SPEAKER_PIN, NOTE_D5);
-  delay(300);
-  tone(SPEAKER_PIN, NOTE_CS5);
-  delay(300);
-  for (byte i = 0; i < 10; i++) {
-    for (int pitch = -10; pitch <= 10; pitch++) {
-      tone(SPEAKER_PIN, NOTE_C5 + pitch);
-      delay(5);
+  if(perdida){
+    tone(SPEAKER_PIN, NOTE_DS5);
+    delay(300);
+    tone(SPEAKER_PIN, NOTE_D5);
+    delay(300);
+    tone(SPEAKER_PIN, NOTE_CS5);
+    delay(300);
+    for (byte i = 0; i < 10; i++) {
+      for (int pitch = -10; pitch <= 10; pitch++) {
+        tone(SPEAKER_PIN, NOTE_C5 + pitch);
+        delay(5);
+      }
     }
+    noTone(SPEAKER_PIN);
   }
-  noTone(SPEAKER_PIN);
-
+  
   displayScore();
-  puntuacion = 0;
+  score = 0;
   delay(500);
 }
 
+/*
+* Método que realiza cada una de las jugadas
+*/
+void jugar(){
+  while (1)
+    {
+        //genera una opracion aletario por la posición de los datos dentro del array
+        int posicion = generarOperacionAleatoria();
+        //Se muestra la jugada y se comprueba si se ha acertado o no
+        //Si acierta eliminamos esa operación para que no vuelva a aparecer incrementamos la puntuación
+        //Si no acierta fin de partida. También acaba la partida si no hay más operaciones a realizar.
+        if (mostrarJugada(posicion))
+        {
+            playLevelUpSound();
+            eliminarElemento(posicion);
+            score++;
+        } else {
+          fin_de_partida(1);
+          break;
+        }
+        printData();
+        if(totalOperaciones <= 0){
+          fin_de_partida(0);
+          break;
+        }
+    }
+    opcion = 0;
+}
 
-void displayScore() {
-  if(puntuacion > record){
-    lcd.setCursor(0,1);
-    lcd.printf("Record : %d", puntuacion);
-    record = puntuacion;
-    EEPROM.writeInt(eeAdress, record);
-    EEPROM.commit();
-    delay(5000);
-  }else{
-    lcd.setCursor(0,1);
-    lcd.printf("Puntos %d: ", puntuacion);
-    delay(5000);
+void setup(){
+  Serial.begin(11600);
+  initRecord();
+  initLCD();
+  initSpeaker();
+  wellcome();
+}
+
+void loop(){
+  //Inicializamos las variables del juego
+  initGame();
+  //Mostramos las opciones del juego
+  mainMenu();
+
+  char key = datosKeyPad[0];
+  opcion = checkOpcion(key);
+  //Si la opción es correcta , selecionamos las tablas para jugar e inicializamos la partida.
+  if(opcion > 0 && opcion < 5){
+    seleccionarTablas();
+    inicializarTablas(tablas, 10);
+    printData();
+    jugar();
   }
 }
