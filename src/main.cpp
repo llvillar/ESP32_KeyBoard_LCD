@@ -322,7 +322,7 @@ void displayScore() {
     lcd.printf("Puntos: %d ", score);
     delay(3000);
     lcd.setCursor(0,1);
-    lcd.printf("Record: %d", score);
+    lcd.printf("Record: %d", record);
     delay(2000);
   }
 }
